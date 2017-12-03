@@ -64,12 +64,15 @@
 
 void readSuperBlock(void);
 void inspectInodes(void);
+void getDirectBlocks(unsigned char *);
+void getSingleIndirectBlocks(unsigned char *);
+void getDoubleIndirectBlocks(unsigned char *);
 void inspectFreelist(void);
 void checkBlockCounter(void);
 
 void help(char *);
 unsigned int get4Bytes(const unsigned char *);
-void readBlock(unsigned int);
+void readBlock(unsigned , unsigned char *);
 
 typedef struct blockCounter {
     int free;
@@ -117,7 +120,7 @@ int main(int argc, char *argv[]) {
             printf("Error: cannot read partition table of disk '%s'", argv[1]);
             exit(3);
         }
-        ptptr = partTable + part + 32;
+        ptptr = partTable + part * 32;
         partType = get4Bytes(ptptr + 0);
         if((partType & 0x7FFFFFFF) != 0x00000058) {
             printf("Error: partition %d of disk '%s' does not contain an EOS32 file system", part, argv[1]);
@@ -133,6 +136,8 @@ int main(int argc, char *argv[]) {
         exit(6);
     }
 
+    inspectInodes();
+
 }
 
 void readSuperBlock(void) {
@@ -145,15 +150,16 @@ void inspectInodes(void) {
     unsigned int mode;
     unsigned int nLink;
     unsigned int size;
+    unsigned int block;
 
-    readBlock(1);
+    readBlock(1, blockBuffer);
     p = blockBuffer;
 
     p += 8; //skip to inode list size
     inodeListSize = get4Bytes(p);
 
     while(i < inodeListSize) {
-        readBlock(i);
+        readBlock(i, blockBuffer);
         p = blockBuffer;
 
         for(j = 0; j < INOPB; j++) {
@@ -171,7 +177,12 @@ void inspectInodes(void) {
             size = get4Bytes(p);
             p += 4;
 
-
+            getDirectBlocks(p);
+            p += 24;
+            getSingleIndirectBlocks(p);
+            p += 4;
+            getDoubleIndirectBlocks(p);
+            p += 4;
 
         }
 
@@ -179,6 +190,57 @@ void inspectInodes(void) {
     }
 
     //TODO: go through inodes and count blocks
+
+}
+
+void getDirectBlocks(unsigned char *p) {
+    int i;
+
+    for(i = 0; i < 6; i++) {
+        bCounter[get4Bytes(p)].occupied += 1;
+        p += 4;
+    }
+
+}
+
+void getSingleIndirectBlocks(unsigned char *p) {
+    int i;
+    unsigned char indirectBlockBuffer[BLOCK_SIZE];
+    unsigned char *p0;
+
+    readBlock(get4Bytes(p), indirectBlockBuffer);
+    p0 = indirectBlockBuffer;
+
+    for(i = 0; i < BLOCK_SIZE / sizeof(unsigned int); i++) {
+        bCounter[get4Bytes(p0)].occupied += 1;
+        p0 += 4;
+
+    }
+}
+
+void getDoubleIndirectBlocks(unsigned char *p) {
+    int i, j;
+    unsigned char indirectBlockBuffer[BLOCK_SIZE];
+    unsigned char doubleIndirectBlockBuffer[BLOCK_SIZE];
+    unsigned char *p0;
+    unsigned char *p1;
+
+    readBlock(get4Bytes(p), indirectBlockBuffer);
+    p0 = indirectBlockBuffer;
+
+    for(i = 0; i < BLOCK_SIZE / sizeof(unsigned int); i++) {
+
+        readBlock(get4Bytes(p0), doubleIndirectBlockBuffer);
+        p1 = doubleIndirectBlockBuffer;
+
+        for(j = 0; j < BLOCK_SIZE / sizeof(unsigned int), i++) {
+            bCounter[get4Bytes(p1)].occupied += 1;
+            p1 += 4;
+        }
+
+        p0 += 4;
+
+    }
 }
 
 void inspectFreelist(void) {
@@ -189,10 +251,10 @@ void checkBlockCounter(void) {
     //TODO: check that blockCounter for every block has only a value of 1
 }
 
-void readBlock(unsigned int blockNum) {
+void readBlock(unsigned int blockNum, unsigned char *blockBuffer) {
     fseek(disk, fsStart * SECTOR_SIZE + blockNum * BLOCK_SIZE, SEEK_SET);
     if(fread(blockBuffer, BLOCK_SIZE, 1, disk) != 1) {
-        printf("Error: cannit read block %u (0x%X)", blockNum, blockNum);
+        printf("Error: cannot read block %u (0x%X)", blockNum, blockNum);
         exit(3);
     }
 }
