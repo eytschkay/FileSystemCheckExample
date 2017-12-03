@@ -233,7 +233,7 @@ void getDoubleIndirectBlocks(unsigned char *p) {
         readBlock(get4Bytes(p0), doubleIndirectBlockBuffer);
         p1 = doubleIndirectBlockBuffer;
 
-        for(j = 0; j < BLOCK_SIZE / sizeof(unsigned int), i++) {
+        for(j = 0; j < BLOCK_SIZE / sizeof(unsigned int); i++) {
             bCounter[get4Bytes(p1)].occupied += 1;
             p1 += 4;
         }
