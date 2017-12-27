@@ -69,7 +69,9 @@ void getSingleIndirectBlocks(unsigned char *);
 void getDoubleIndirectBlocks(unsigned char *);
 void inspectFreelist(void);
 void checkBlockCounter(void);
-void checkDirectories(void);
+void getRootDir(void);
+void checkDirectory(unsigned int);
+void readInode(unsigned int);
 
 void help(char *);
 unsigned int get4Bytes(const unsigned char *);
@@ -88,8 +90,6 @@ char *endptr;
 unsigned char partTable[SECTOR_SIZE];
 unsigned char *ptptr;
 unsigned int partType;
-unsigned char blockBuffer[BLOCK_SIZE];
-unsigned char *p;                               //placeholder pointer hold address within the block buffer
 unsigned int inodeListSize;
 bCounter_t *bCounter;
 
@@ -152,6 +152,8 @@ void inspectInodes(void) {
     unsigned int nLink;
     unsigned int size;
     unsigned int block;
+    unsigned char blockBuffer[BLOCK_SIZE];
+    unsigned char *p;                               //placeholder pointer hold address within the block buffer
 
     readBlock(1, blockBuffer);
     p = blockBuffer;
@@ -252,7 +254,7 @@ void checkBlockCounter(void) {
     //TODO: check that blockCounter for every block has only a value of 1
 }
 
-void checkDirectories(void) {
+void getRootDir(void) {
     unsigned char blockBuffer[BLOCK_SIZE];
     unsigned char *p;
     unsigned int rootDirBlock;
@@ -267,9 +269,55 @@ void checkDirectories(void) {
     rootDirBlock = get4Bytes(p);
     printf("%d\n", rootDirBlock);
 
-    //read root directory
-    readBlock(rootDirBlock, blockBuffer);
+    //start recursive run through directories
+    checkDirectory(rootDirBlock);
+}
+
+void checkDirectory(unsigned int blockNumber) {
+    //TODO: check if inode is directory
+    //if isDir...
+    unsigned int inode;
+    unsigned char blockBuffer[BLOCK_SIZE];
+    unsigned char *p;
+    readBlock(blockNumber, blockBuffer);
     p = blockBuffer;
+
+    for(int i = 0; i < DIRPB; i++) {
+        inode = get4Bytes(p);
+
+        readInode(inode);
+
+        //increase p to the next directory entry
+        p += 4;
+        p += DIRSIZ;
+    }
+}
+
+void readInode(unsigned int inodeNumber) {
+    int mode;
+    unsigned int blk;
+
+    //get block where the inode is located
+    unsigned int block = (inodeNumber / INOPB) + 2;
+    //location inside the block
+    unsigned int inode = inodeNumber % INOPB;
+
+    unsigned char blockBuffer[BLOCK_SIZE];
+    unsigned char *p;
+
+    readBlock(block, blockBuffer);
+    p = blockBuffer;
+
+    p += inode * 64;
+
+    mode = get4Bytes(p);
+    p += 32;
+    blk = get4Bytes(p);
+
+    if(mode & IFDIR) {
+        checkDirectory(blk);
+    }
+
 }
 
 void readBlock(unsigned int blockNum, unsigned char *blockBuffer) {
