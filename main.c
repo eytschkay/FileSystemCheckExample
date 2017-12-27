@@ -305,7 +305,7 @@ void checkDirectory(unsigned int blockNumber) {
 
         inodeCounter[inode]++;
 
-        readInode(inode);
+        if(inodeCounter[inode] <= 1) readInode(inode);
 
         //increase p to the next directory entry
         p += 4;
@@ -349,34 +349,40 @@ void readInode(unsigned int inodeNumber) {
 
     blk = get4Bytes(p);
     p += 4;
-    readBlock(blk, siBlockBuffer);
-    sip = siBlockBuffer;
-    //single indirect block
-    for(int i = 0; i < BLOCK_SIZE / sizeof(unsigned int); i++) {
-        blk = get4Bytes(sip);
-        sip += 4;
-        if(blk != 0) checkDirectory(blk);
+    if(blk != 0) {
+        readBlock(blk, siBlockBuffer);
+        sip = siBlockBuffer;
+        //single indirect block
+        for(int i = 0; i < BLOCK_SIZE / sizeof(unsigned int); i++) {
+            blk = get4Bytes(sip);
+            sip += 4;
+            if(blk != 0) checkDirectory(blk);
+        }
     }
+
 
     blk = get4Bytes(p);
     p += 4;
-    readBlock(blk, siBlockBuffer);
-    sip = siBlockBuffer;
-    //double indirect block
-    for(int i = 0; i < BLOCK_SIZE / sizeof(unsigned int); i++) {
-        blk = get4Bytes(sip);
-        sip += 4;
+    if(blk != 0) {
+        readBlock(blk, siBlockBuffer);
+        sip = siBlockBuffer;
+        //double indirect block
+        for(int i = 0; i < BLOCK_SIZE / sizeof(unsigned int); i++) {
+            blk = get4Bytes(sip);
+            sip += 4;
 
-        readBlock(blk, diBlockBuffer);
-        dip = diBlockBuffer;
+            readBlock(blk, diBlockBuffer);
+            dip = diBlockBuffer;
 
-        for(int j = 0; j < BLOCK_SIZE / sizeof(unsigned int); j++) {
-            blk = get4Bytes(dip);
-            dip += 4;
-            if(blk != 0) checkDirectory(blk);
+            for(int j = 0; j < BLOCK_SIZE / sizeof(unsigned int); j++) {
+                blk = get4Bytes(dip);
+                dip += 4;
+                if(blk != 0) checkDirectory(blk);
+            }
+
         }
-
     }
+
 
 }
 
