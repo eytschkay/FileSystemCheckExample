@@ -12,7 +12,7 @@
  * [ ] Ein Inode mit Linkcount n != 0 erscheint nicht in exakt n Verzeichnissen: Exit-Code 17.
  * [ ] Ein Inode hat ein Typfeld mit illegalem Wert: Exit-Code 18.
  * [ ] Ein Inode erscheint in einem Verzeichnis, ist aber frei: Exit-Code 19.
- * [ ] Der Root-Inode ist kein Verzeichnis: Exit-Code 20.
+ * [x] Der Root-Inode ist kein Verzeichnis: Exit-Code 20.
  * [ ] Ein Verzeichnis kann von der Wurzel aus nicht erreicht werden: Exit-Code 21.
  * [ ] Alle anderen Dateisystem-Fehler: Exit-Code 99.
  *
@@ -22,7 +22,7 @@
  * [x] Datei Ein/Ausgabefehler: Exit-Code 3.
  * [x] Illegale Partitionsnummer: Exit-Code 4.
  * [x] Partition enthaelt kein EOS32-Dateisystem: Exit-Code 5.
- * [ ] Erfolgloser Aufruf von malloc(): Exit-Code 6.
+ * [x] Erfolgloser Aufruf von malloc(): Exit-Code 6.
  * [ ] Alle anderen Fehler: Exit-Code 9.
  */
 
@@ -91,7 +91,9 @@ unsigned char partTable[SECTOR_SIZE];
 unsigned char *ptptr;
 unsigned int partType;
 unsigned int inodeListSize;
+
 bCounter_t *bCounter;
+unsigned int *inodeCounter;
 
 int main(int argc, char *argv[]) {
     if(argc != 3) {
@@ -160,6 +162,13 @@ void inspectInodes(void) {
 
     p += 8; //skip to inode list size
     inodeListSize = get4Bytes(p);
+
+    inodeCounter = (unsigned int *) malloc(sizeof(unsigned int) * inodeListSize * 64);
+    getRootDir();
+    if(bCounter == NULL) {
+        printf("Error: Failed malloc() call\n");
+        exit(6);
+    }
 
     while(i < inodeListSize) {
         readBlock(i, blockBuffer);
@@ -258,12 +267,21 @@ void getRootDir(void) {
     unsigned char blockBuffer[BLOCK_SIZE];
     unsigned char *p;
     unsigned int rootDirBlock;
+    int mode;
 
     //Get root directory
     readBlock(2, blockBuffer);
     p = blockBuffer;
 
     p += 64; //get to first inode
+
+    mode = get4Bytes(p);
+
+    if((mode & IFMT) != IFDIR) {
+        printf("Error: Root-inode is not a directory");
+        exit(20);
+    }
+
     p += 32; //go to first direct block
 
     rootDirBlock = get4Bytes(p);
@@ -284,6 +302,8 @@ void checkDirectory(unsigned int blockNumber) {
 
     for(int i = 0; i < DIRPB; i++) {
         inode = get4Bytes(p);
+
+        inodeCounter[inode]++;
 
         readInode(inode);
 
@@ -315,7 +335,7 @@ void readInode(unsigned int inodeNumber) {
     p += inode * 64;
 
     mode = get4Bytes(p);
-    if(!(mode & IFDIR)) {
+    if((mode & IFMT) != IFDIR) {
         return;
     }
     p += 32;
