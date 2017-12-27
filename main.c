@@ -26,6 +26,8 @@
  * [ ] Alle anderen Fehler: Exit-Code 9.
  */
 
+//TODO: Correctly implement inodeCounter
+//TODO: Go through inodes and check if inodeCounter fits with link count of the inodes
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -292,8 +294,6 @@ void getRootDir(void) {
 }
 
 void checkDirectory(unsigned int blockNumber) {
-    //TODO: check if inode is directory
-    //if isDir...
     unsigned int inode;
     unsigned char blockBuffer[BLOCK_SIZE];
     unsigned char *p;
@@ -303,9 +303,7 @@ void checkDirectory(unsigned int blockNumber) {
     for(int i = 0; i < DIRPB; i++) {
         inode = get4Bytes(p);
 
-        inodeCounter[inode]++;
-
-        if(inodeCounter[inode] <= 1) readInode(inode);
+        readInode(inode);
 
         //increase p to the next directory entry
         p += 4;
