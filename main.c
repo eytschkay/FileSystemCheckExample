@@ -69,6 +69,7 @@ void getSingleIndirectBlocks(unsigned char *);
 void getDoubleIndirectBlocks(unsigned char *);
 void inspectFreelist(void);
 void checkBlockCounter(void);
+void checkDirectories(void);
 
 void help(char *);
 unsigned int get4Bytes(const unsigned char *);
@@ -249,6 +250,26 @@ void inspectFreelist(void) {
 
 void checkBlockCounter(void) {
     //TODO: check that blockCounter for every block has only a value of 1
+}
+
+void checkDirectories(void) {
+    unsigned char blockBuffer[BLOCK_SIZE];
+    unsigned char *p;
+    unsigned int rootDirBlock;
+
+    //Get root directory
+    readBlock(2, blockBuffer);
+    p = blockBuffer;
+
+    p += 64; //get to first inode
+    p += 32; //go to first direct block
+
+    rootDirBlock = get4Bytes(p);
+    printf("%d\n", rootDirBlock);
+
+    //read root directory
+    readBlock(rootDirBlock, blockBuffer);
+    p = blockBuffer;
 }
 
 void readBlock(unsigned int blockNum, unsigned char *blockBuffer) {
