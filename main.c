@@ -70,6 +70,7 @@ void getDirectBlocks(unsigned char *);
 void getSingleIndirectBlocks(unsigned char *);
 void getDoubleIndirectBlocks(unsigned char *);
 void inspectFreelist(void);
+void followLinkBlock(unsigned int);
 void checkBlockCounter(void);
 void getRootDir(void);
 void checkDirectory(unsigned int);
@@ -295,7 +296,33 @@ void inspectFreelist(void) {
         if(blk < numBlocks) bCounter[blk].free += 1;
     }
 
-    //TODO: Continue from link block
+    if(link > 0) followLinkBlock(link);
+}
+
+void followLinkBlock(unsigned int link) {
+    unsigned char blockBuffer[BLOCK_SIZE];
+    unsigned char *p;
+    unsigned int nFree;
+    unsigned int linkBlk;
+    unsigned int blk;
+
+    readBlock(link, blockBuffer);
+    p = blockBuffer;
+
+    nFree = get4Bytes(p);
+    p += 4;
+
+    linkBlk = get4Bytes(p);
+    p += 4;
+
+    for(int i = 1; i < NICFREE; i++) {
+        blk = get4Bytes(p);
+        p += 4;
+        if(blk < numBlocks) bCounter[blk].free++;
+    }
+
+    if(linkBlk > 0) followLinkBlock(linkBlk);
+
 }
 
 void checkBlockCounter(void) {
