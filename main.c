@@ -2,16 +2,16 @@
  * BSHU2 -- EOS32 file system check
  *
  * Hier ist eine (nicht vollstaendige) Liste von moeglichen Fehlern:
- * [ ] Ein Block ist weder in einer Datei noch auf der Freiliste: Exit-Code 10.
- * [ ] Ein Block ist sowohl in einer Datei als auch auf der Freiliste: Exit-Code 11.
- * [ ] Ein Block ist mehr als einmal in der Freiliste: Exit-Code 12.
- * [ ] Ein Block ist mehr als einmal in einer Datei oder in mehr als einer Datei: Exit-Code 13.
+ * [x] Ein Block ist weder in einer Datei noch auf der Freiliste: Exit-Code 10.
+ * [x] Ein Block ist sowohl in einer Datei als auch auf der Freiliste: Exit-Code 11.
+ * [x] Ein Block ist mehr als einmal in der Freiliste: Exit-Code 12.
+ * [x] Ein Block ist mehr als einmal in einer Datei oder in mehr als einer Datei: Exit-Code 13.
  * [ ] Die Groesse einer Datei ist nicht konsistent mit den im Inode vermerkten Bloecken: Exit-Code 14.
- * [ ] Ein Inode mit Linkcount 0 erscheint in einem Verzeichnis: Exit-Code 15.
- * [ ] Ein Inode mit Linkcount 0 ist nicht frei: Exit-Code 16.
- * [ ] Ein Inode mit Linkcount n != 0 erscheint nicht in exakt n Verzeichnissen: Exit-Code 17.
+ * [x] Ein Inode mit Linkcount 0 erscheint in einem Verzeichnis: Exit-Code 15.
+ * [x] Ein Inode mit Linkcount 0 ist nicht frei: Exit-Code 16.
+ * [x] Ein Inode mit Linkcount n != 0 erscheint nicht in exakt n Verzeichnissen: Exit-Code 17.
  * [ ] Ein Inode hat ein Typfeld mit illegalem Wert: Exit-Code 18.
- * [ ] Ein Inode erscheint in einem Verzeichnis, ist aber frei: Exit-Code 19.
+ * [x] Ein Inode erscheint in einem Verzeichnis, ist aber frei: Exit-Code 19.
  * [x] Der Root-Inode ist kein Verzeichnis: Exit-Code 20.
  * [ ] Ein Verzeichnis kann von der Wurzel aus nicht erreicht werden: Exit-Code 21.
  * [ ] Alle anderen Dateisystem-Fehler: Exit-Code 99.
@@ -64,8 +64,8 @@
 #define IOEXEC  000001                      //other's execute permission
 
 
-void readSuperBlock(void);
 void inspectInodes(void);
+void checkMode(unsigned int);
 void getDirectBlocks(unsigned char *);
 void getSingleIndirectBlocks(unsigned char *);
 void getDoubleIndirectBlocks(unsigned char *);
@@ -145,11 +145,9 @@ int main(int argc, char *argv[]) {
         exit(6);
     }
 
+    getRootDir();
     inspectInodes();
-
-}
-
-void readSuperBlock(void) {
+    checkBlockCounter();
 
 }
 
@@ -157,6 +155,7 @@ void inspectInodes(void) {
     unsigned int i = 2;
     unsigned int j;
     unsigned int mode;
+    unsigned char isFree;
     unsigned int nLink;
     unsigned int size;
     unsigned int block;
@@ -187,13 +186,33 @@ void inspectInodes(void) {
             p += 4;
 
             if(mode != 0) {
-                //TODO: Check if mode is legit
+                checkMode(mode);
+                isFree = 0;
             } else {
                 //inode is free
+                isFree = 1;
             }
 
             nLink = get4Bytes(p);
             p += 24;
+
+            if(nLink == 0 && inodeCounter[(i * INOPB) + j] > 0) {
+                printf("Error: Inode with a link count of 0 appears in a directory");
+                exit(15);
+            }
+            if(isFree == 0 && nLink == 0) {
+                printf("Error: Inode with a link count of 0 is not free");
+                exit(16);
+            }
+            if(nLink != inodeCounter[(i * INOPB) + j]) {
+                printf("Error: Inode with a link count higher than 0 does not appear in exactly n directories");
+                exit(17);
+            }
+            if(isFree && inodeCounter[(i * INOPB) + j]) {
+                printf("Error: Free inode appears in a directory");
+                exit(19);
+            }
+
             size = get4Bytes(p);
             p += 4;
 
@@ -209,7 +228,15 @@ void inspectInodes(void) {
         i++;
     }
 
+    inspectFreelist();
+
     //TODO: go through inodes and count blocks
+
+}
+
+void checkMode(unsigned int mode) {
+
+    //TODO
 
 }
 
@@ -273,7 +300,6 @@ void inspectFreelist(void) {
     //TODO: count blocks appearing on free list
     unsigned char blockBuffer[BLOCK_SIZE];
     unsigned char *p;
-    unsigned int nFree;
     unsigned int link;
     unsigned int blk;
 
@@ -282,8 +308,6 @@ void inspectFreelist(void) {
 
     p += 24;
     p += 500 * 4;
-
-    nFree = get4Bytes(p);
     p += 4;
 
     //Go though free list in super block
@@ -302,14 +326,12 @@ void inspectFreelist(void) {
 void followLinkBlock(unsigned int link) {
     unsigned char blockBuffer[BLOCK_SIZE];
     unsigned char *p;
-    unsigned int nFree;
     unsigned int linkBlk;
     unsigned int blk;
 
     readBlock(link, blockBuffer);
     p = blockBuffer;
 
-    nFree = get4Bytes(p);
     p += 4;
 
     linkBlk = get4Bytes(p);
@@ -326,7 +348,30 @@ void followLinkBlock(unsigned int link) {
 }
 
 void checkBlockCounter(void) {
-    //TODO: check that blockCounter for every block has only a value of 1
+    int free;
+    int occupied;
+
+    for(int i = 0; i < numBlocks; i++) {
+        free = bCounter[i].free;
+        occupied = bCounter[i].occupied;
+
+        if(free == 0 && occupied == 0) {
+            printf("Error: Block is neither in a file nor free");
+            exit(10);
+        }
+        if(free == 1 && occupied == 1) {
+            printf("Error: Block is in a file and free");
+            exit(11);
+        }
+        if(free > 1) {
+            printf("Error: Block is on the free list more than once");
+            exit(12);
+        }
+        if(occupied > 1) {
+            printf("Error: Block is in a file more than once or is in more than one file");
+            exit(13);
+        }
+    }
 }
 
 void getRootDir(void) {
