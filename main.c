@@ -93,6 +93,7 @@ unsigned char partTable[SECTOR_SIZE];
 unsigned char *ptptr;
 unsigned int partType;
 unsigned int inodeListSize;
+unsigned int numBlocks;
 
 bCounter_t *bCounter;
 unsigned int *inodeCounter;
@@ -135,7 +136,9 @@ int main(int argc, char *argv[]) {
         fsSize = get4Bytes(ptptr + 8);
     }
 
-    bCounter = (bCounter_t *) malloc(sizeof(bCounter_t) * (fsSize/SPB));
+    numBlocks = fsSize / SPB;
+
+    bCounter = (bCounter_t *) malloc(sizeof(bCounter_t) * numBlocks);
     if(bCounter == NULL) {
         printf("Error: Failed malloc() call\n");
         exit(6);
@@ -166,11 +169,13 @@ void inspectInodes(void) {
     inodeListSize = get4Bytes(p);
 
     inodeCounter = (unsigned int *) malloc(sizeof(unsigned int) * inodeListSize * 64);
-    getRootDir();
-    if(bCounter == NULL) {
+
+    if(inodeCounter == NULL) {
         printf("Error: Failed malloc() call\n");
         exit(6);
     }
+
+    getRootDir();
 
     while(i < inodeListSize) {
         readBlock(i, blockBuffer);
@@ -209,10 +214,12 @@ void inspectInodes(void) {
 
 void getDirectBlocks(unsigned char *p) {
     int i;
+    unsigned int blk;
 
     for(i = 0; i < 6; i++) {
-        bCounter[get4Bytes(p)].occupied += 1;
+        blk = get4Bytes(p);
         p += 4;
+        if(blk < numBlocks) bCounter[blk].occupied += 1;
     }
 
 }
@@ -221,13 +228,15 @@ void getSingleIndirectBlocks(unsigned char *p) {
     int i;
     unsigned char indirectBlockBuffer[BLOCK_SIZE];
     unsigned char *p0;
+    unsigned int blk;
 
     readBlock(get4Bytes(p), indirectBlockBuffer);
     p0 = indirectBlockBuffer;
 
     for(i = 0; i < BLOCK_SIZE / sizeof(unsigned int); i++) {
-        bCounter[get4Bytes(p0)].occupied += 1;
+        blk = get4Bytes(p0);
         p0 += 4;
+        if(blk < numBlocks) bCounter[blk].occupied += 1;
 
     }
 }
@@ -238,6 +247,7 @@ void getDoubleIndirectBlocks(unsigned char *p) {
     unsigned char doubleIndirectBlockBuffer[BLOCK_SIZE];
     unsigned char *p0;
     unsigned char *p1;
+    unsigned int blk;
 
     readBlock(get4Bytes(p), indirectBlockBuffer);
     p0 = indirectBlockBuffer;
@@ -247,9 +257,10 @@ void getDoubleIndirectBlocks(unsigned char *p) {
         readBlock(get4Bytes(p0), doubleIndirectBlockBuffer);
         p1 = doubleIndirectBlockBuffer;
 
-        for(j = 0; j < BLOCK_SIZE / sizeof(unsigned int); i++) {
-            bCounter[get4Bytes(p1)].occupied += 1;
+        for(j = 0; j < BLOCK_SIZE / sizeof(unsigned int); j++) {
+            blk = get4Bytes(p1);
             p1 += 4;
+            if(blk < numBlocks) bCounter[blk].occupied += 1;
         }
 
         p0 += 4;
@@ -259,6 +270,32 @@ void getDoubleIndirectBlocks(unsigned char *p) {
 
 void inspectFreelist(void) {
     //TODO: count blocks appearing on free list
+    unsigned char blockBuffer[BLOCK_SIZE];
+    unsigned char *p;
+    unsigned int nFree;
+    unsigned int link;
+    unsigned int blk;
+
+    readBlock(1, blockBuffer);
+    p = blockBuffer;
+
+    p += 24;
+    p += 500 * 4;
+
+    nFree = get4Bytes(p);
+    p += 4;
+
+    //Go though free list in super block
+    link = get4Bytes(p);
+    p += 4;
+
+    for(int i = 1; i < NICFREE; i++) {
+        blk = get4Bytes(p);
+        p += 4;
+        if(blk < numBlocks) bCounter[blk].free += 1;
+    }
+
+    //TODO: Continue from link block
 }
 
 void checkBlockCounter(void) {
@@ -303,7 +340,9 @@ void checkDirectory(unsigned int blockNumber) {
     for(int i = 0; i < DIRPB; i++) {
         inode = get4Bytes(p);
 
-        readInode(inode);
+        inodeCounter[inode]++;
+
+        if(inodeCounter[inode] < 1) readInode(inode);
 
         //increase p to the next directory entry
         p += 4;
