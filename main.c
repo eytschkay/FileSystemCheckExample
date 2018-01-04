@@ -27,7 +27,6 @@
  */
 
 //TODO: Correctly implement inodeCounter
-//TODO: Go through inodes and check if inodeCounter fits with link count of the inodes
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -148,6 +147,13 @@ int main(int argc, char *argv[]) {
 
     initInodeCounter();
     getRootDir();
+
+    //Debug print
+    for(int i = 0; i < inodeListSize * 64; i++) {
+        printf("%d\n", inodeCounter[i]);
+    }
+    //end Debug print
+
     inspectInodes();
     checkBlockCounter();
 
@@ -156,7 +162,6 @@ int main(int argc, char *argv[]) {
 void initInodeCounter() {
     unsigned char blockBuffer[BLOCK_SIZE];
     unsigned char *p;
-    unsigned int inodeListSize;
 
     readBlock(1, blockBuffer);
     p = blockBuffer;
@@ -194,6 +199,7 @@ void inspectInodes(void) {
     while(i < inodeListSize) {
         readBlock(i, blockBuffer);
         p = blockBuffer;
+        bCounter[i].occupied += 1;
 
         for(j = 0; j < INOPB; j++) {
             if(i == 2 && j == 0) {
@@ -212,10 +218,15 @@ void inspectInodes(void) {
                 isFree = 1;
             }
 
+            if(((mode && IFMT) == IFCHR) || ((mode && IFMT) == IFBLK)) {
+                p += 60;
+                continue;
+            }
+
             nLink = get4Bytes(p);
             p += 24;
 
-            if(nLink == 0 && inodeCounter[(i * INOPB) + j] > 0) {
+            /*if(nLink == 0 && inodeCounter[(i * INOPB) + j] > 0) {
                 printf("Error: Inode with a link count of 0 appears in a directory");
                 exit(15);
             }
@@ -230,7 +241,7 @@ void inspectInodes(void) {
             if(isFree && inodeCounter[(i * INOPB) + j]) {
                 printf("Error: Free inode appears in a directory");
                 exit(19);
-            }
+            }*/
 
             size = get4Bytes(p);
             p += 4;
@@ -248,8 +259,6 @@ void inspectInodes(void) {
     }
 
     inspectFreelist();
-
-    //TODO: go through inodes and count blocks
 
 }
 
@@ -295,13 +304,16 @@ void getDoubleIndirectBlocks(unsigned char *p) {
     unsigned char *p0;
     unsigned char *p1;
     unsigned int blk;
+    unsigned int blk0;
 
     readBlock(get4Bytes(p), indirectBlockBuffer);
     p0 = indirectBlockBuffer;
 
     for(i = 0; i < BLOCK_SIZE / sizeof(unsigned int); i++) {
 
-        readBlock(get4Bytes(p0), doubleIndirectBlockBuffer);
+        blk0 = get4Bytes(p0);
+        if(blk0 < numBlocks) readBlock(blk0, doubleIndirectBlockBuffer);
+        else continue;
         p1 = doubleIndirectBlockBuffer;
 
         for(j = 0; j < BLOCK_SIZE / sizeof(unsigned int); j++) {
@@ -316,7 +328,6 @@ void getDoubleIndirectBlocks(unsigned char *p) {
 }
 
 void inspectFreelist(void) {
-    //TODO: count blocks appearing on free list
     unsigned char blockBuffer[BLOCK_SIZE];
     unsigned char *p;
     unsigned int link;
@@ -332,6 +343,7 @@ void inspectFreelist(void) {
     //Go though free list in super block
     link = get4Bytes(p);
     p += 4;
+    bCounter[link].free += 1;
 
     for(int i = 1; i < NICFREE; i++) {
         blk = get4Bytes(p);
@@ -355,6 +367,7 @@ void followLinkBlock(unsigned int link) {
 
     linkBlk = get4Bytes(p);
     p += 4;
+    bCounter[link].free += 1;
 
     for(int i = 1; i < NICFREE; i++) {
         blk = get4Bytes(p);
@@ -370,7 +383,7 @@ void checkBlockCounter(void) {
     int free;
     int occupied;
 
-    for(int i = 0; i < numBlocks; i++) {
+    for(int i = 2; i < numBlocks; i++) {
         free = bCounter[i].free;
         occupied = bCounter[i].occupied;
 
@@ -433,7 +446,7 @@ void checkDirectory(unsigned int blockNumber) {
 
         inodeCounter[inode]++;
 
-        if(inodeCounter[inode] < 1) readInode(inode);
+        if(inodeCounter[inode] <= 1) readInode(inode);
 
         //increase p to the next directory entry
         p += 4;
@@ -518,7 +531,7 @@ void readBlock(unsigned int blockNum, unsigned char *blockBuffer) {
     fseek(disk, fsStart * SECTOR_SIZE + blockNum * BLOCK_SIZE, SEEK_SET);
     if(fread(blockBuffer, BLOCK_SIZE, 1, disk) != 1) {
         printf("Error: cannot read block %u (0x%X)", blockNum, blockNum);
-        exit(3);
+        exit(99);
     }
 }
 
