@@ -64,6 +64,7 @@
 #define IOEXEC  000001                      //other's execute permission
 
 
+void initInodeCounter();
 void inspectInodes(void);
 void checkMode(unsigned int);
 void getDirectBlocks(unsigned char *);
@@ -145,9 +146,31 @@ int main(int argc, char *argv[]) {
         exit(6);
     }
 
+    initInodeCounter();
     getRootDir();
     inspectInodes();
     checkBlockCounter();
+
+}
+
+void initInodeCounter() {
+    unsigned char blockBuffer[BLOCK_SIZE];
+    unsigned char *p;
+    unsigned int inodeListSize;
+
+    readBlock(1, blockBuffer);
+    p = blockBuffer;
+
+    p += 8;
+
+    inodeListSize = get4Bytes(p);
+
+    inodeCounter = (unsigned int *) malloc(sizeof(unsigned int) * inodeListSize * 64);
+
+    if(inodeCounter == NULL) {
+        printf("Error: Failed malloc() call\n");
+        exit(6);
+    }
 
 }
 
@@ -168,20 +191,16 @@ void inspectInodes(void) {
     p += 8; //skip to inode list size
     inodeListSize = get4Bytes(p);
 
-    inodeCounter = (unsigned int *) malloc(sizeof(unsigned int) * inodeListSize * 64);
-
-    if(inodeCounter == NULL) {
-        printf("Error: Failed malloc() call\n");
-        exit(6);
-    }
-
-    getRootDir();
-
     while(i < inodeListSize) {
         readBlock(i, blockBuffer);
         p = blockBuffer;
 
         for(j = 0; j < INOPB; j++) {
+            if(i == 2 && j == 0) {
+                p += 64;
+                continue;
+            }
+
             mode = get4Bytes(p);
             p += 4;
 
