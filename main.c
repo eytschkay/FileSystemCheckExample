@@ -85,6 +85,11 @@ typedef struct blockCounter {
     int occupied;
 } bCounter_t;
 
+typedef struct inoCounter {
+    int refs;
+    char visited;
+} iCounter_t;
+
 FILE *disk;
 unsigned int fsStart;
 unsigned int fsSize;
@@ -97,7 +102,7 @@ unsigned int inodeListSize;
 unsigned int numBlocks;
 
 bCounter_t *bCounter;
-unsigned int *inodeCounter;
+iCounter_t *inodeCounter;
 
 int main(int argc, char *argv[]) {
     if(argc != 3) {
@@ -150,7 +155,7 @@ int main(int argc, char *argv[]) {
 
     //Debug print
     for(int i = 0; i < inodeListSize * 64; i++) {
-        printf("%d\n", inodeCounter[i]);
+        printf("%d\n", inodeCounter[i].refs);
     }
     //end Debug print
 
@@ -170,7 +175,7 @@ void initInodeCounter() {
 
     inodeListSize = get4Bytes(p);
 
-    inodeCounter = (unsigned int *) malloc(sizeof(unsigned int) * inodeListSize * 64);
+    inodeCounter = (iCounter_t *) malloc(sizeof(iCounter_t) * inodeListSize * 64);
 
     if(inodeCounter == NULL) {
         printf("Error: Failed malloc() call\n");
@@ -226,7 +231,7 @@ void inspectInodes(void) {
             nLink = get4Bytes(p);
             p += 24;
 
-            /*if(nLink == 0 && inodeCounter[(i * INOPB) + j] > 0) {
+            if(nLink == 0 && inodeCounter[((i - 2) * INOPB) + j].refs > 0) {
                 printf("Error: Inode with a link count of 0 appears in a directory");
                 exit(15);
             }
@@ -234,14 +239,14 @@ void inspectInodes(void) {
                 printf("Error: Inode with a link count of 0 is not free");
                 exit(16);
             }
-            if(nLink != inodeCounter[(i * INOPB) + j]) {
+            if(nLink != inodeCounter[((i - 2) * INOPB) + j].refs) {
                 printf("Error: Inode with a link count higher than 0 does not appear in exactly n directories");
                 exit(17);
             }
-            if(isFree && inodeCounter[(i * INOPB) + j]) {
+            if(isFree && inodeCounter[((i - 2) * INOPB) + j].refs) {
                 printf("Error: Free inode appears in a directory");
                 exit(19);
-            }*/
+            }
 
             size = get4Bytes(p);
             p += 4;
@@ -430,6 +435,8 @@ void getRootDir(void) {
     rootDirBlock = get4Bytes(p);
     printf("%d\n", rootDirBlock);
 
+    inodeCounter[1].visited = 1;
+
     //start recursive run through directories
     checkDirectory(rootDirBlock);
 }
@@ -444,9 +451,9 @@ void checkDirectory(unsigned int blockNumber) {
     for(int i = 0; i < DIRPB; i++) {
         inode = get4Bytes(p);
 
-        inodeCounter[inode]++;
+        inodeCounter[inode].refs++;
 
-        if(inodeCounter[inode] <= 1) readInode(inode);
+        if(!inodeCounter[inode].visited) readInode(inode);
 
         //increase p to the next directory entry
         p += 4;
@@ -469,6 +476,8 @@ void readInode(unsigned int inodeNumber) {
     unsigned char *p;
     unsigned char *sip;
     unsigned char *dip;
+
+    inodeCounter[inodeNumber].visited = 1;
 
     readBlock(block, blockBuffer);
     p = blockBuffer;
