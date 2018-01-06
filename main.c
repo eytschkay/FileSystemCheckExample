@@ -193,7 +193,8 @@ void inspectInodes(void) {
     unsigned int size;
     unsigned int block;
     unsigned char blockBuffer[BLOCK_SIZE];
-    unsigned char *p;                               //placeholder pointer hold address within the block buffer
+    unsigned char *p; //placeholder pointer hold address within the block buffer
+    unsigned char flag = 0;
 
     readBlock(1, blockBuffer);
     p = blockBuffer;
@@ -216,16 +217,15 @@ void inspectInodes(void) {
             p += 4;
 
             if(mode != 0) {
-                checkMode(mode);
+                //checkMode(mode);
+                if((mode & IFMT) == IFCHR || (mode & IFMT) == IFBLK) {
+                    flag = 1;
+                }
                 isFree = 0;
-            } else {
+            }
+            else {
                 //inode is free
                 isFree = 1;
-            }
-
-            if(((mode && IFMT) == IFCHR) || ((mode && IFMT) == IFBLK)) {
-                p += 60;
-                continue;
             }
 
             nLink = get4Bytes(p);
@@ -246,6 +246,11 @@ void inspectInodes(void) {
             if(isFree && inodeCounter[((i - 2) * INOPB) + j].refs) {
                 printf("Error: Free inode appears in a directory");
                 exit(19);
+            }
+
+            if(flag) {
+                p += 36;
+                continue;
             }
 
             size = get4Bytes(p);
