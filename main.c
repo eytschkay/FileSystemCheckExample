@@ -202,7 +202,7 @@ void inspectInodes(void) {
     p += 8; //skip to inode list size
     inodeListSize = get4Bytes(p);
 
-    while(i < inodeListSize) {
+    while(i < (inodeListSize + 2)) {
         readBlock(i, blockBuffer);
         p = blockBuffer;
         bCounter[i].occupied += 1;
@@ -249,6 +249,7 @@ void inspectInodes(void) {
             }
 
             if(flag) {
+                flag = 0;
                 p += 36;
                 continue;
             }
@@ -295,8 +296,12 @@ void getSingleIndirectBlocks(unsigned char *p) {
     unsigned char indirectBlockBuffer[BLOCK_SIZE];
     unsigned char *p0;
     unsigned int blk;
+    unsigned int link;
 
-    readBlock(get4Bytes(p), indirectBlockBuffer);
+    link = get4Bytes(p);
+    bCounter[link].occupied += 1;
+
+    readBlock(link, indirectBlockBuffer);
     p0 = indirectBlockBuffer;
 
     for(i = 0; i < BLOCK_SIZE / sizeof(unsigned int); i++) {
@@ -315,14 +320,21 @@ void getDoubleIndirectBlocks(unsigned char *p) {
     unsigned char *p1;
     unsigned int blk;
     unsigned int blk0;
+    unsigned int link;
 
-    readBlock(get4Bytes(p), indirectBlockBuffer);
+    link = get4Bytes(p);
+    bCounter[link].occupied += 1;
+
+    readBlock(link, indirectBlockBuffer);
     p0 = indirectBlockBuffer;
 
     for(i = 0; i < BLOCK_SIZE / sizeof(unsigned int); i++) {
 
         blk0 = get4Bytes(p0);
-        if(blk0 < numBlocks) readBlock(blk0, doubleIndirectBlockBuffer);
+        if(blk0 < numBlocks) {
+            bCounter[blk0].occupied += 1;
+            readBlock(blk0, doubleIndirectBlockBuffer);
+        }
         else continue;
         p1 = doubleIndirectBlockBuffer;
 
@@ -340,6 +352,7 @@ void getDoubleIndirectBlocks(unsigned char *p) {
 void inspectFreelist(void) {
     unsigned char blockBuffer[BLOCK_SIZE];
     unsigned char *p;
+    unsigned int nFree;
     unsigned int link;
     unsigned int blk;
 
@@ -348,14 +361,16 @@ void inspectFreelist(void) {
 
     p += 24;
     p += 500 * 4;
+    nFree = get4Bytes(p);
     p += 4;
 
     //Go though free list in super block
     link = get4Bytes(p);
     p += 4;
-    bCounter[link].free += 1;
+    //bCounter[link].free += 1;
 
     for(int i = 1; i < NICFREE; i++) {
+        if(i >= nFree) break;
         blk = get4Bytes(p);
         p += 4;
         if(blk < numBlocks) bCounter[blk].free += 1;
@@ -398,19 +413,19 @@ void checkBlockCounter(void) {
         occupied = bCounter[i].occupied;
 
         if(free == 0 && occupied == 0) {
-            printf("Error: Block is neither in a file nor free");
+            printf("Error: Block %d is neither in a file nor free (10)\n", i);
             exit(10);
         }
         if(free == 1 && occupied == 1) {
-            printf("Error: Block is in a file and free");
+            printf("Error: Block %d is in a file and free (11)\n", i);
             exit(11);
         }
         if(free > 1) {
-            printf("Error: Block is on the free list more than once");
+            printf("Error: Block %d is on the free list more than once (12)\n", i);
             exit(12);
         }
         if(occupied > 1) {
-            printf("Error: Block is in a file more than once or is in more than one file");
+            printf("Error: Block %d is in a file more than once or is in more than one file (13)\n", i);
             exit(13);
         }
     }
