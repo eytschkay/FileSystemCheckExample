@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
     disk = fopen(argv[1], "rb");
     if(disk == NULL) {
         //can't open image file
-        printf("Error: cannot open disk image file '%s'", argv[1]);
+        //printf("Error: cannot open disk image file '%s'", argv[1]);
         exit(2);
     }
     if(strcmp(argv[2], "*") == 0) {
@@ -124,18 +124,18 @@ int main(int argc, char *argv[]) {
         //argv[2] is partition number of file system
         part = strtoul(argv[2], &endptr, 10);
         if(*endptr != '\0' ||part < 0 || part > 15) {
-            printf("Error: illegal partition number '%s'", argv[2]);
+            //printf("Error: illegal partition number '%s'", argv[2]);
             exit(4);
         }
         fseek(disk, 1 * SECTOR_SIZE, SEEK_SET);
         if(fread(partTable, 1 , SECTOR_SIZE, disk) != SECTOR_SIZE) {
-            printf("Error: cannot read partition table of disk '%s'", argv[1]);
+            //printf("Error: cannot read partition table of disk '%s'", argv[1]);
             exit(3);
         }
         ptptr = partTable + part * 32;
         partType = get4Bytes(ptptr + 0);
         if((partType & 0x7FFFFFFF) != 0x00000058) {
-            printf("Error: partition %d of disk '%s' does not contain an EOS32 file system", part, argv[1]);
+            //printf("Error: partition %d of disk '%s' does not contain an EOS32 file system", part, argv[1]);
             exit(5);
         }
         fsStart = get4Bytes(ptptr + 4);
@@ -146,18 +146,12 @@ int main(int argc, char *argv[]) {
 
     bCounter = (bCounter_t *) malloc(sizeof(bCounter_t) * numBlocks);
     if(bCounter == NULL) {
-        printf("Error: Failed malloc() call\n");
+        //printf("Error: Failed malloc() call\n");
         exit(6);
     }
 
     initInodeCounter();
     getRootDir();
-
-    //Debug print
-    for(int i = 0; i < inodeListSize * 64; i++) {
-        printf("%d\n", inodeCounter[i].refs);
-    }
-    //end Debug print
 
     inspectInodes();
     checkBlockCounter();
@@ -178,7 +172,7 @@ void initInodeCounter() {
     inodeCounter = (iCounter_t *) malloc(sizeof(iCounter_t) * inodeListSize * 64);
 
     if(inodeCounter == NULL) {
-        printf("Error: Failed malloc() call\n");
+        //printf("Error: Failed malloc() call\n");
         exit(6);
     }
 
@@ -232,19 +226,19 @@ void inspectInodes(void) {
             p += 24;
 
             if(nLink == 0 && inodeCounter[((i - 2) * INOPB) + j].refs > 0) {
-                printf("Error: Inode with a link count of 0 appears in a directory");
+                //printf("Error: Inode with a link count of 0 appears in a directory\n");
                 exit(15);
             }
             if(isFree == 0 && nLink == 0) {
-                printf("Error: Inode with a link count of 0 is not free");
+                //printf("Error: Inode with a link count of 0 is not free\n");
                 exit(16);
             }
             if(nLink != inodeCounter[((i - 2) * INOPB) + j].refs) {
-                printf("Error: Inode with a link count higher than 0 does not appear in exactly n directories");
+                //printf("Error: Inode with a link count higher than 0 does not appear in exactly n directories\n");
                 exit(17);
             }
             if(isFree && inodeCounter[((i - 2) * INOPB) + j].refs) {
-                printf("Error: Free inode appears in a directory");
+                //printf("Error: Free inode appears in a directory\n");
                 exit(19);
             }
 
@@ -413,19 +407,19 @@ void checkBlockCounter(void) {
         occupied = bCounter[i].occupied;
 
         if(free == 0 && occupied == 0) {
-            printf("Error: Block %d is neither in a file nor free (10)\n", i);
+            //printf("Error: Block %d is neither in a file nor free (10)\n", i);
             exit(10);
         }
         if(free == 1 && occupied == 1) {
-            printf("Error: Block %d is in a file and free (11)\n", i);
+            //printf("Error: Block %d is in a file and free (11)\n", i);
             exit(11);
         }
         if(free > 1) {
-            printf("Error: Block %d is on the free list more than once (12)\n", i);
+            //printf("Error: Block %d is on the free list more than once (12)\n", i);
             exit(12);
         }
         if(occupied > 1) {
-            printf("Error: Block %d is in a file more than once or is in more than one file (13)\n", i);
+            //printf("Error: Block %d is in a file more than once or is in more than one file (13)\n", i);
             exit(13);
         }
     }
@@ -446,14 +440,14 @@ void getRootDir(void) {
     mode = get4Bytes(p);
 
     if((mode & IFMT) != IFDIR) {
-        printf("Error: Root-inode is not a directory");
+        //printf("Error: Root-inode is not a directory");
         exit(20);
     }
 
     p += 32; //go to first direct block
 
     rootDirBlock = get4Bytes(p);
-    printf("%d\n", rootDirBlock);
+    //printf("%d\n", rootDirBlock);
 
     inodeCounter[1].visited = 1;
 
@@ -559,7 +553,7 @@ void readInode(unsigned int inodeNumber) {
 void readBlock(unsigned int blockNum, unsigned char *blockBuffer) {
     fseek(disk, fsStart * SECTOR_SIZE + blockNum * BLOCK_SIZE, SEEK_SET);
     if(fread(blockBuffer, BLOCK_SIZE, 1, disk) != 1) {
-        printf("Error: cannot read block %u (0x%X)", blockNum, blockNum);
+        //printf("Error: cannot read block %u (0x%X)", blockNum, blockNum);
         exit(99);
     }
 }
