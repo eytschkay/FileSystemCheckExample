@@ -1,5 +1,5 @@
 /*
- * BSHU2 -- EOS32 file system check
+ * file system check
  *
  * Hier ist eine (nicht vollstaendige) Liste von moeglichen Fehlern:
  * [x] Ein Block ist weder in einer Datei noch auf der Freiliste: Exit-Code 10.
